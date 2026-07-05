@@ -12,6 +12,12 @@
   <img src="https://img.shields.io/badge/Python-3.9%2B-3776AB?style=flat-square&logo=python" alt="Python Version">
 </p>
 
+<p align="center">
+  <a href="https://github.com/mahammadanish321/romo/archive/refs/heads/main.zip">
+    <img src="https://img.shields.io/badge/📥_Download_Romo_(ZIP)-FF2D55?style=for-the-badge&logo=windows&logoColor=white" alt="Download Romo (ZIP)">
+  </a>
+</p>
+
 ---
 
 ## 🌟 Key Features
