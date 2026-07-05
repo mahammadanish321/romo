@@ -1,0 +1,10 @@
+# SSL certificates (generated locally for HTTPS)
+cert.pem
+key.pem
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Downloaded font assets
+Outfit-Bold.ttf

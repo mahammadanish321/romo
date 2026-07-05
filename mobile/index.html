@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>remo - Desktop Remote</title>
+    <!-- Google Fonts for premium typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- HEADER -->
+        <header class="header">
+            <div class="brand">
+                <span class="logo">remo</span>
+                <span class="status-indicator disconnected" id="connection-status" title="Disconnected"></span>
+            </div>
+            
+            <div class="header-actions">
+                <!-- Voice Typing -->
+                <button class="icon-btn neumorphic-btn" id="mic-toggle-btn" title="Voice Typing">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                        <path d="M19 10v1a7 7 0 0 1-14 0v-1M12 19v4M8 23h8"/>
+                    </svg>
+                </button>
+                
+                <!-- Keyboard Toggle -->
+                <button class="icon-btn neumorphic-btn" id="keyboard-toggle-btn" title="Type Keyboard">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="4" width="20" height="16" rx="2" ry="2"/>
+                        <path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M18 12h.01M10 12h4M6 16h12"/>
+                    </svg>
+                </button>
+                
+                <!-- Lock/Power Button -->
+                <button class="icon-btn neumorphic-btn danger" id="power-btn" data-key="lock" title="Lock Desktop">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- VIEW TOGGLE -->
+        <div class="toggle-container">
+            <div class="toggle-switch">
+                <button class="toggle-btn active" id="toggle-dpad">D-Pad</button>
+                <button class="toggle-btn" id="toggle-trackpad">Trackpad</button>
+                <div class="toggle-slider"></div>
+            </div>
+        </div>
+
+        <!-- MAIN CONTROL PANELS -->
+        <main class="main-content">
+            <!-- 1. D-PAD / BUTTONS REMOTE -->
+            <section class="control-panel active" id="dpad-panel">
+                <!-- Floating Air Mouse button -->
+                <button class="dpad-air-mouse-btn neumorphic-btn" id="air-mouse-trigger" title="Hold for Air Mouse">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" class="gyro-icon">
+                        <circle cx="12" cy="12" r="10"/>
+                        <circle cx="12" cy="12" r="4"/>
+                        <line x1="12" y1="2" x2="12" y2="22"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                    </svg>
+                </button>
+
+                <div class="wheel-outer-wrapper">
+                    <!-- Apple TV circular clickpad -->
+                    <div class="clickpad-outer" id="circular-wheel">
+                        <!-- Up Arrow -->
+                        <button class="clickpad-direction up" data-key="up" aria-label="Up">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <polyline points="18 15 12 9 6 15"/>
+                            </svg>
+                        </button>
+                        
+                        <!-- Right Arrow -->
+                        <button class="clickpad-direction right" data-key="right" aria-label="Right">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <polyline points="9 18 15 12 9 6"/>
+                            </svg>
+                        </button>
+                        
+                        <!-- Down Arrow -->
+                        <button class="clickpad-direction down" data-key="down" aria-label="Down">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <polyline points="6 9 12 15 18 9"/>
+                            </svg>
+                        </button>
+                        
+                        <!-- Left Arrow -->
+                        <button class="clickpad-direction left" data-key="left" aria-label="Left">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <polyline points="15 18 9 12 15 6"/>
+                            </svg>
+                        </button>
+                        
+                        <!-- Center Select / OK Button -->
+                        <button class="clickpad-center" id="select-btn" data-key="enter" aria-label="OK">
+                            <span>OK</span>
+                        </button>
+                        
+                        <!-- Scroller LED feedback dot -->
+                        <div class="scroll-led" id="scroll-led"></div>
+                    </div>
+                </div>
+
+                <!-- Custom Scroller Behavior Label/Toggle -->
+                <div class="scroller-indicator">
+                    <span class="scroller-label" id="scroller-label">Wheel Seek: Arrows</span>
+                    <button class="icon-btn-small neumorphic-btn" id="scroller-toggle-mode" title="Change Scroller Mode">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 1v22M7 1v22M1 5h22M1 19h22"/>
+                        </svg>
+                    </button>
+                </div>
+            </section>
+
+            <!-- 2. TRACKPAD PANEL -->
+            <section class="control-panel" id="trackpad-panel">
+                <div class="trackpad-container">
+                    <div class="trackpad-surface neumorphic-concave" id="trackpad-surface">
+                        <div class="trackpad-instructions">
+                            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm0 16a6 6 0 1 1 6-6 6 6 0 0 1-6 6Z"/>
+                            </svg>
+                            <p>Swipe to move cursor</p>
+                            <p class="sub-instructions">Tap for left click, two-finger tap for right click</p>
+                        </div>
+                    </div>
+                    
+                    <div class="trackpad-buttons">
+                        <button class="trackpad-btn click-left neumorphic-btn" id="tp-click-left">
+                            <span>Left Click</span>
+                        </button>
+                        <button class="trackpad-btn click-right neumorphic-btn" id="tp-click-right">
+                            <span>Right Click</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- MINIMAL INLINE KEYBOARD BAR (Now overlays main-content area) -->
+            <div class="minimal-keyboard-bar" id="keyboard-overlay">
+                <div class="kb-bar-content neumorphic-concave">
+                    <input type="text" id="desktop-keyboard-textarea" class="kb-input" placeholder="Type here to type on PC...">
+                    <button class="kb-action-btn neumorphic-btn" id="btn-kb-backspace" title="Backspace">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/>
+                            <line x1="18" y1="9" x2="12" y2="15"/>
+                            <line x1="12" y1="9" x2="18" y2="15"/>
+                        </svg>
+                    </button>
+                    <button class="kb-action-btn neumorphic-btn" id="btn-kb-enter" title="Enter">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <polyline points="9 10 4 15 9 20"/>
+                            <path d="M20 4v7a4 4 0 0 1-4 4H4"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- EXTRA QUICK CONTROLS (Fullscreen, Back/Esc, Close Window) -->
+        <section class="extra-controls">
+            <button class="control-btn neumorphic-btn" id="btn-esc" data-key="escape">
+                <span>Esc</span>
+            </button>
+            <button class="control-btn neumorphic-btn" id="btn-fullscreen" data-key="fullscreen">
+                <span>Fullscreen</span>
+            </button>
+            <button class="control-btn neumorphic-btn danger" id="btn-close-window" data-key="close_window" title="Close Window / Tab">
+                <span>Close Tab</span>
+            </button>
+        </section>
+
+        <!-- BOTTOM CONTROLS (Playback, Volume, Mute) -->
+        <footer class="footer">
+            <div class="media-controls-pill neumorphic-convex">
+                <!-- Back / Return Button -->
+                <button class="media-btn" id="btn-back" data-key="back" title="Back / Return">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="19" y1="12" x2="5" y2="12"/>
+                        <polyline points="12 19 5 12 12 5"/>
+                    </svg>
+                </button>
+                
+                <!-- Play / Pause -->
+                <button class="media-btn play-pause" id="btn-play-pause" data-key="space" title="Play/Pause">
+                    <svg class="icon-play" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                    <svg class="icon-pause hidden" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                        <rect x="6" y="4" width="4" height="16"/>
+                        <rect x="14" y="4" width="4" height="16"/>
+                    </svg>
+                </button>
+                
+                <!-- Mute -->
+                <button class="media-btn" id="btn-mute" data-key="mute" title="Mute Volume">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <path d="M23 9l-6 6M17 9l6 6" class="mute-cross"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Volume Rocker (Vertical Pill Style, Apple TV inspired but digitalized) -->
+            <div class="volume-rocker neumorphic-convex">
+                <button class="vol-btn vol-up" id="btn-vol-up" data-key="volume_up" title="Volume Up">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="12" y1="5" x2="12" y2="19"/>
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                </button>
+                <div class="vol-label">VOL</div>
+                <button class="vol-btn vol-down" id="btn-vol-down" data-key="volume_down" title="Volume Down">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                </button>
+            </div>
+        </footer>
+
+        <!-- NEUMORPHIC APP DOCK FOR OPEN MEDIA WINDOWS -->
+        <div class="app-dock" id="app-dock"></div>
+
+        <!-- TOAST NOTIFICATION CONTAINER -->
+        <div class="toast-container" id="toast-container"></div>
+    </div>
+
+    <!-- CUSTOM NEUMORPHIC MODAL CONFIRMATION -->
+    <div class="custom-modal-overlay" id="confirm-modal">
+        <div class="custom-modal-content neumorphic-convex">
+            <h3 class="modal-title" id="confirm-modal-title">Confirmation</h3>
+            <p class="modal-message" id="confirm-modal-message">Are you sure?</p>
+            <div class="modal-buttons">
+                <button class="modal-btn cancel neumorphic-btn" id="confirm-modal-cancel">Cancel</button>
+                <button class="modal-btn confirm neumorphic-btn danger" id="confirm-modal-ok">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
