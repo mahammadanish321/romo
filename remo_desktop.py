@@ -60,6 +60,7 @@ import asyncio
 import threading
 import mimetypes
 import ctypes
+import winreg
 import tkinter as tk
 from tkinter import messagebox
 import qrcode
@@ -83,6 +84,94 @@ connected_clients = set()
 root = None
 status_label = None
 tray_icon = None
+
+# Global variables for cursor size management
+ORIGINAL_POINTER_SIZE = 1
+ORIGINAL_CURSOR_BASE_SIZE = 32
+IS_CURSOR_ENLARGED = False
+cursor_timer = None
+
+def get_original_cursor_settings():
+    global ORIGINAL_POINTER_SIZE, ORIGINAL_CURSOR_BASE_SIZE
+    try:
+        # Read PointerSize
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Accessibility", 0, winreg.KEY_READ) as key:
+                ORIGINAL_POINTER_SIZE = winreg.QueryValueEx(key, "PointerSize")[0]
+        except Exception:
+            ORIGINAL_POINTER_SIZE = 1
+            
+        # Read CursorBaseSize
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Cursors", 0, winreg.KEY_READ) as key:
+                ORIGINAL_CURSOR_BASE_SIZE = winreg.QueryValueEx(key, "CursorBaseSize")[0]
+        except Exception:
+            ORIGINAL_CURSOR_BASE_SIZE = 32
+            
+        print(f"[Cursor] Original Settings: PointerSize={ORIGINAL_POINTER_SIZE}, CursorBaseSize={ORIGINAL_CURSOR_BASE_SIZE}")
+    except Exception as e:
+        print(f"[Cursor] Error getting original settings: {e}")
+
+def apply_cursor_size(pointer_size, base_size):
+    try:
+        # Update Accessibility PointerSize
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Accessibility", 0, winreg.KEY_SET_VALUE) as key:
+                winreg.SetValueEx(key, "PointerSize", 0, winreg.REG_DWORD, pointer_size)
+        except Exception as e:
+            print(f"[Cursor] Error setting PointerSize: {e}")
+            
+        # Update Cursors CursorBaseSize
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Cursors", 0, winreg.KEY_SET_VALUE) as key:
+                winreg.SetValueEx(key, "CursorBaseSize", 0, winreg.REG_DWORD, base_size)
+        except Exception as e:
+            print(f"[Cursor] Error setting CursorBaseSize: {e}")
+
+        # Reload cursors
+        ctypes.windll.user32.SystemParametersInfoW(0x0057, 0, None, 0)
+        
+        # Broadcast setting change message to all windows with short timeout (100ms)
+        ctypes.windll.user32.SendMessageTimeoutW(
+            0xFFFF, 0x001A, 0, "AccessibilityParameters", 0x0002, 100, None
+        )
+    except Exception as e:
+        print(f"[Cursor] Error applying cursor size: {e}")
+
+def start_shrink_task():
+    try:
+        asyncio.create_task(shrink_cursor())
+    except Exception as e:
+        print(f"[Cursor] Error scheduling shrink: {e}")
+
+async def shrink_cursor():
+    global IS_CURSOR_ENLARGED
+    if IS_CURSOR_ENLARGED:
+        IS_CURSOR_ENLARGED = False
+        await asyncio.to_thread(apply_cursor_size, ORIGINAL_POINTER_SIZE, ORIGINAL_CURSOR_BASE_SIZE)
+        print("[Cursor] Restored original cursor size.")
+
+def trigger_cursor_enlarge():
+    global IS_CURSOR_ENLARGED, cursor_timer
+    
+    # Cancel existing shrink timer
+    if cursor_timer:
+        cursor_timer.cancel()
+        cursor_timer = None
+        
+    if not IS_CURSOR_ENLARGED:
+        IS_CURSOR_ENLARGED = True
+        # Enlarge in background thread
+        asyncio.create_task(asyncio.to_thread(apply_cursor_size, 4, 128))
+        print("[Cursor] Enlarged cursor size to 4.")
+        
+    # Shrink back after 1.5 seconds of inactivity
+    try:
+        loop = asyncio.get_running_loop()
+        cursor_timer = loop.call_later(1.5, start_shrink_task)
+    except Exception as e:
+        print(f"[Cursor] Error setting call_later timer: {e}")
+
 
 # Windows ctypes structures and constants
 class POINT(ctypes.Structure):
@@ -540,7 +629,7 @@ async def watch_open_apps(websocket):
     first_scan = True
     try:
         while True:
-            apps = get_open_media_apps()
+            apps = await asyncio.to_thread(get_open_media_apps)
             if first_scan:
                 print(f"[App Dock] First scan found {len(apps)} windows: {[a['name'] for a in apps]}")
                 first_scan = False
@@ -579,6 +668,7 @@ async def ws_handler(websocket):
                     dx = data.get('dx', 0)
                     dy = data.get('dy', 0)
                     move_mouse(dx, dy)
+                    trigger_cursor_enlarge()
                     
                 elif msg_type == 'mouse_click':
                     btn = data.get('button', 'left')
@@ -669,6 +759,12 @@ async def ws_handler(websocket):
     except websockets.exceptions.ConnectionClosed:
         print("Mobile remote disconnected")
     finally:
+        global cursor_timer
+        if cursor_timer:
+            cursor_timer.cancel()
+            cursor_timer = None
+        if IS_CURSOR_ENLARGED:
+            apply_cursor_size(ORIGINAL_POINTER_SIZE, ORIGINAL_CURSOR_BASE_SIZE)
         app_watcher_task.cancel()
         connected_clients.remove(websocket)
         trigger_gui_update()
@@ -971,6 +1067,7 @@ def start_async_server(loop, port, ssl_context):
     loop.run_until_complete(main_async(port, ssl_context))
 
 if __name__ == "__main__":
+    get_original_cursor_settings()
     ip = get_local_ip()
     port = 8000
     
@@ -1002,5 +1099,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
+        if IS_CURSOR_ENLARGED:
+            apply_cursor_size(ORIGINAL_POINTER_SIZE, ORIGINAL_CURSOR_BASE_SIZE)
         print("Server stopped.")
         sys.exit(0)

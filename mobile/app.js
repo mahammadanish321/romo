@@ -413,7 +413,7 @@
         lastDpadTouchX = touch.clientX;
         lastDpadTouchY = touch.clientY;
 
-        const sensitivity = 1.35;
+        const sensitivity = 1.62;
         if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
             sendCommand({
                 type: 'mouse_move',
@@ -475,7 +475,7 @@
         lastTouchY = touch.clientY;
 
         // Apply slight sensitivity boost
-        const sensitivity = 1.35;
+        const sensitivity = 1.62;
         
         if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
             sendCommand({
@@ -538,7 +538,7 @@
     let orientationEventsCount = 0;
     
     // Smoothing & Sensitivity Constants
-    const POINTER_SENSITIVITY = 12.0; // Perfect sensitivity for laser pointing at screen
+    const POINTER_SENSITIVITY = 14.4; // Perfect sensitivity for laser pointing at screen
     const NOISE_THRESHOLD = 0.05;     // Jitter threshold in degrees
     const SMOOTHING_FACTOR = 0.22;    // Low-pass filter for smooth motion
     const CALIBRATION_EVENTS = 12;    // Discard initial events to let sensors calibrate
