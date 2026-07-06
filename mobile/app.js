@@ -28,10 +28,21 @@
     const scrollerLabel = document.getElementById('scroller-label');
     let scrollerMode = 'arrows'; // 'arrows' or 'scroll'
 
-    // Haptic feedback helper
-    function vibrate(duration) {
+    // Haptic feedback helper with premium presets
+    const HAPTIC = {
+        tick: [6],
+        light: [12],
+        medium: [22],
+        heavy: [45],
+        success: [15, 25, 15],
+        warning: [50, 40, 50],
+        error: [60, 50, 60, 50, 90]
+    };
+
+    function vibrate(typeOrDuration) {
         if (navigator.vibrate) {
-            navigator.vibrate(duration);
+            const pattern = HAPTIC[typeOrDuration] || typeOrDuration;
+            navigator.vibrate(pattern);
         }
     }
 
@@ -78,12 +89,12 @@
             }
             
             function onCancel() {
-                vibrate(10);
+                vibrate('light');
                 cleanUp(false);
             }
             
             function onOk() {
-                vibrate(20);
+                vibrate('medium');
                 cleanUp(true);
             }
             
@@ -103,7 +114,7 @@
 
         repeatTimeout = setTimeout(() => {
             repeatInterval = setInterval(() => {
-                vibrate(8);
+                vibrate('tick');
                 sendCommand({ type: 'key_press', key: key });
             }, 100);
         }, 350);
@@ -131,7 +142,7 @@
             statusIndicator.classList.remove('disconnected');
             statusIndicator.classList.add('connected');
             clearTimeout(reconnectTimeout);
-            vibrate([50, 30, 50]); // friendly connect double vibration
+            vibrate('success'); // friendly connect double vibration
         };
 
         socket.onclose = function() {
@@ -147,6 +158,7 @@
         socket.onerror = function(err) {
             console.error('WebSocket Error:', err);
         };
+
 
         socket.onmessage = function(event) {
             try {
@@ -177,7 +189,7 @@
         toggleTrackpad.classList.remove('active');
         dpadPanel.classList.add('active');
         trackpadPanel.classList.remove('active');
-        vibrate(10);
+        vibrate('medium');
     });
 
     toggleTrackpad.addEventListener('click', () => {
@@ -185,7 +197,7 @@
         toggleDpad.classList.remove('active');
         trackpadPanel.classList.add('active');
         dpadPanel.classList.remove('active');
-        vibrate(10);
+        vibrate('medium');
     });
 
     // ----------------------------------------------------
@@ -207,7 +219,7 @@
                     iconPause.classList.add('hidden');
                     iconPlay.classList.remove('hidden');
                 }
-                vibrate(20);
+                vibrate('medium');
                 sendCommand({ type: 'key_press', key: 'space' });
             } else if (key === 'mute') {
                 isMuted = !isMuted;
@@ -216,35 +228,35 @@
                 } else {
                     btnMute.classList.remove('muted');
                 }
-                vibrate(20);
+                vibrate('medium');
                 sendCommand({ type: 'key_press', key: 'mute' });
             } else if (key === 'volume_up') {
-                vibrate(12);
+                vibrate('light');
                 sendCommand({ type: 'key_press', key: 'volume_up' });
                 startKeyRepeat(key);
             } else if (key === 'volume_down') {
-                vibrate(12);
+                vibrate('light');
                 sendCommand({ type: 'key_press', key: 'volume_down' });
                 startKeyRepeat(key);
             } else if (key === 'fullscreen') {
-                vibrate(15);
+                vibrate('medium');
                 sendCommand({ type: 'key_press', key: 'f' }); // standard streaming fullscreen toggle
             } else if (key === 'close_window') {
                 showConfirm('Close Tab / Window', 'Are you sure you want to close the active tab/window?').then((confirmed) => {
                     if (confirmed) {
-                        vibrate([40, 20, 40]);
+                        vibrate('heavy');
                         sendCommand({ type: 'close_window' });
                     }
                 });
             } else if (key === 'lock') {
                 showConfirm('Lock Computer', 'Are you sure you want to lock your computer?').then((confirmed) => {
                     if (confirmed) {
-                        vibrate([40, 40]);
+                        vibrate('heavy');
                         sendCommand({ type: 'key_press', key: 'lock' });
                     }
                 });
             } else {
-                vibrate(15);
+                vibrate('light');
                 if (key === 'enter') {
                     sendCommand({ type: 'mouse_click', button: 'left' });
                 } else {
@@ -272,7 +284,7 @@
     // WHEEL BEHAVIOR TOGGLE
     // ----------------------------------------------------
     scrollerToggleBtn.addEventListener('click', () => {
-        vibrate(15);
+        vibrate('medium');
         if (scrollerMode === 'arrows') {
             scrollerMode = 'scroll';
             scrollerLabel.textContent = 'Wheel Seek: Mouse Scroll';
@@ -360,7 +372,7 @@
     }
 
     function triggerScrollerTick(direction) {
-        vibrate(8); // tiny tick vibration
+        vibrate('tick'); // tiny tick vibration
         
         if (scrollerMode === 'arrows') {
             const keyToSend = direction === 'clockwise' ? 'right' : 'left';
@@ -399,7 +411,7 @@
         isDpadDragging = true;
         
         dpadPanel.classList.add('dragging-cursor');
-        vibrate(10);
+        vibrate('light');
     }, { passive: false });
 
     dpadPanel.addEventListener('touchmove', (e) => {
@@ -427,7 +439,7 @@
         if (isDpadDragging) {
             isDpadDragging = false;
             dpadPanel.classList.remove('dragging-cursor');
-            vibrate(10);
+            vibrate('light');
         }
     };
 
@@ -563,7 +575,7 @@
                     sendCommand({ type: 'key_press', key: 'zoom_out' });
                 }
                 lastPinchDist = currentPinchDist;
-                vibrate(10);
+                vibrate('tick');
             } else {
                 // Two-finger scroll
                 isScrolling = true;
@@ -591,7 +603,7 @@
 
             if (Math.abs(dx) > SWIPE_THRESHOLD || Math.abs(dy) > SWIPE_THRESHOLD) {
                 gestureConsumed = true;
-                vibrate(25);
+                vibrate('medium');
                 if (Math.abs(dx) > Math.abs(dy)) {
                     // Horizontal swipe
                     if (dx > 0) {
@@ -621,7 +633,7 @@
 
         // ── 2-finger tap → Right Click ──
         if (gestureFingers === 2 && !gestureConsumed) {
-            vibrate(20);
+            vibrate('medium');
             sendCommand({ type: 'mouse_click', button: 'right' });
             gestureFingers = 0;
             isTracking = false;
@@ -639,7 +651,7 @@
                 sendCommand({ type: 'mouse_up', button: 'left' });
                 isDoubleTapDragging = false;
                 lastTapTime = 0;
-                vibrate(15);
+                vibrate('light');
                 return;
             }
             
@@ -653,13 +665,13 @@
             if (duration < 220 && distance < 6) {
                 // Check for double-tap
                 if (now - lastTapTime < DOUBLE_TAP_THRESHOLD) {
-                    vibrate(25);
+                    vibrate('medium');
                     // Double click (two standard clicks in rapid succession)
                     sendCommand({ type: 'mouse_click', button: 'left' });
                     sendCommand({ type: 'mouse_click', button: 'left' });
                     lastTapTime = 0; // Reset to prevent triple
                 } else {
-                    vibrate(15);
+                    vibrate('light');
                     sendCommand({ type: 'mouse_click', button: 'left' });
                     lastTapTime = now;
                 }
@@ -694,13 +706,13 @@
     // Explicit Trackpad Buttons
     document.getElementById('tp-click-left').addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        vibrate(15);
+        vibrate('light');
         sendCommand({ type: 'mouse_click', button: 'left' });
     });
     
     document.getElementById('tp-click-right').addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        vibrate(15);
+        vibrate('light');
         sendCommand({ type: 'mouse_click', button: 'right' });
     });
 
@@ -795,7 +807,7 @@
             return;
         }
 
-        vibrate([20, 20]); // click pulse
+        vibrate('medium'); // click pulse
         isAirMouseActive = true;
         prevAlpha = null;
         prevBeta = null;
@@ -833,7 +845,7 @@
         prevBeta = null;
         smoothDx = 0;
         smoothDy = 0;
-        vibrate(12);
+        vibrate('light');
     };
 
     airMouseBtn.addEventListener('pointerup', deactivateAirMouse);
@@ -850,7 +862,7 @@
     let lastTypedVal = "";
 
     keyboardToggleBtn.addEventListener('click', () => {
-        vibrate(15);
+        vibrate('medium');
         if (keyboardOverlay.classList.contains('active')) {
             keyboardOverlay.classList.remove('active');
             keyboardTextarea.blur();
@@ -908,7 +920,7 @@
 
     keyboardTextarea.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
-            vibrate(15);
+            vibrate('medium');
             e.preventDefault();
             submitKeyboard();
         }
@@ -916,7 +928,7 @@
 
     document.getElementById('btn-kb-backspace').addEventListener('pointerdown', (e) => {
         e.preventDefault(); // prevents input blur
-        vibrate(10);
+        vibrate('light');
         sendCommand({ type: 'key_press', key: 'backspace' });
         if (keyboardTextarea.value.length > 0) {
             keyboardTextarea.value = keyboardTextarea.value.slice(0, -1);
@@ -926,7 +938,7 @@
 
     document.getElementById('btn-kb-enter').addEventListener('pointerdown', (e) => {
         e.preventDefault(); // prevents input blur
-        vibrate(15);
+        vibrate('medium');
         submitKeyboard();
     });
 
@@ -948,7 +960,7 @@
         recognition.onstart = () => {
             isListening = true;
             micToggleBtn.classList.add('listening');
-            vibrate(30);
+            vibrate('heavy');
         };
 
         recognition.onerror = (e) => {
@@ -976,7 +988,7 @@
             }
 
             if (finalSegment) {
-                vibrate(15);
+                vibrate('light');
                 // Send segment to desktop to type instantly, adding a trailing space
                 sendCommand({ type: 'type_text', text: finalSegment + ' ' });
             }
@@ -1006,7 +1018,7 @@
     }
 
     micToggleBtn.addEventListener('click', () => {
-        vibrate(15);
+        vibrate('medium');
         if (!recognition) {
             alert('Voice typing is not supported on this browser. Try Google Chrome or Safari.');
             return;
@@ -1069,7 +1081,7 @@
             btn.innerHTML = svgContent;
 
             btn.addEventListener('click', function() {
-                vibrate(20);
+                vibrate('medium');
                 sendCommand({
                     type: 'activate_app',
                     hwnd: app.hwnd
