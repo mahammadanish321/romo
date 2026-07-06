@@ -89,29 +89,12 @@ tray_icon = None
 IS_CURSOR_ENLARGED = False
 cursor_timer = None
 
-# Cursor type IDs for SetSystemCursor
-CURSOR_IDS = {
-    'Arrow': 32512,
-    'IBeam': 32513,
-    'Wait': 32514,
-    'Cross': 32515,
-    'UpArrow': 32516,
-    'SizeNWSE': 32642,
-    'SizeNESW': 32643,
-    'SizeWE': 32644,
-    'SizeNS': 32645,
-    'SizeAll': 32646,
-    'No': 32648,
-    'Hand': 32649,
-    'AppStarting': 32650,
-}
-
-# Map cursor type IDs to their registry value names under HKCU\Control Panel\Cursors
-CURSOR_REG_NAMES = {
+# OEM cursor IDs for SetSystemCursor
+SYSTEM_CURSORS = {
     32512: 'Arrow',
     32513: 'IBeam',
     32514: 'Wait',
-    32515: 'Crosshair',
+    32515: 'Cross',
     32516: 'UpArrow',
     32642: 'SizeNWSE',
     32643: 'SizeNESW',
@@ -124,39 +107,58 @@ CURSOR_REG_NAMES = {
 }
 
 IMAGE_CURSOR = 2
-LR_LOADFROMFILE = 0x0010
+LR_SHARED = 0x00008000
 SPI_SETCURSORS = 0x0057
-ENLARGED_SIZE = 96  # 3x the default 32px cursor
+ENLARGED_SIZE = 96  # 3x standard 32px cursor size
+
+# Set up ctypes signatures for the cursor functions
+user32 = ctypes.windll.user32
+if hasattr(user32, 'LoadImageW'):
+    from ctypes import wintypes
+    user32.LoadImageW.restype = wintypes.HANDLE
+    user32.LoadImageW.argtypes = [
+        wintypes.HINSTANCE, 
+        wintypes.LPCWSTR, 
+        wintypes.UINT, 
+        ctypes.c_int, 
+        ctypes.c_int, 
+        wintypes.UINT
+    ]
+
+if hasattr(user32, 'CopyImage'):
+    from ctypes import wintypes
+    user32.CopyImage.restype = wintypes.HANDLE
+    user32.CopyImage.argtypes = [
+        wintypes.HANDLE,
+        wintypes.UINT,
+        ctypes.c_int,
+        ctypes.c_int,
+        wintypes.UINT
+    ]
 
 def enlarge_system_cursors():
-    """Load each system cursor file at a larger size and replace the active cursor."""
-    user32 = ctypes.windll.user32
-    try:
-        key_path = r"Control Panel\Cursors"
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ) as key:
-            for cursor_id, reg_name in CURSOR_REG_NAMES.items():
-                try:
-                    cursor_path = winreg.QueryValueEx(key, reg_name)[0]
-                    if not cursor_path:
-                        continue
-                    # Expand environment variables like %SystemRoot%
-                    cursor_path = os.path.expandvars(cursor_path)
-                    if not os.path.exists(cursor_path):
-                        continue
-                    hCursor = user32.LoadImageW(
-                        None, cursor_path, IMAGE_CURSOR,
-                        ENLARGED_SIZE, ENLARGED_SIZE,
-                        LR_LOADFROMFILE
-                    )
-                    if hCursor:
-                        user32.SetSystemCursor(hCursor, cursor_id)
-                except Exception:
-                    pass
-    except Exception as e:
-        print(f"[Cursor] Error enlarging cursors: {e}")
+    """Dynamically load and copy all standard Windows cursors at an enlarged size."""
+    from ctypes import wintypes
+    for cid in SYSTEM_CURSORS:
+        try:
+            # Load the system shared default cursor instance
+            hShared = user32.LoadImageW(
+                None, 
+                ctypes.cast(cid, wintypes.LPCWSTR), 
+                IMAGE_CURSOR, 
+                0, 0, 
+                LR_SHARED
+            )
+            if hShared:
+                # Copy and scale the cursor handle to the enlarged size
+                hScaled = user32.CopyImage(hShared, IMAGE_CURSOR, ENLARGED_SIZE, ENLARGED_SIZE, 0)
+                if hScaled:
+                    user32.SetSystemCursor(hScaled, cid)
+        except Exception as e:
+            print(f"[Cursor] Error scaling cursor ID {cid}: {e}")
 
 def restore_system_cursors():
-    """Restore all system cursors to their default scheme."""
+    """Restore all system cursors back to default sizes."""
     ctypes.windll.user32.SystemParametersInfoW(SPI_SETCURSORS, 0, None, 0)
 
 def start_shrink_task():
