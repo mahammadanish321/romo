@@ -301,6 +301,7 @@
     // ----------------------------------------------------
     const wheel = document.getElementById('circular-wheel');
     const scrollLed = document.getElementById('scroll-led');
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
     
     let isWheelScrolling = false;
     let cx = 0, cy = 0;
@@ -308,6 +309,47 @@
     let accumulatedAngle = 0;
     const thresholdAngle = 0.28; // approx 16 degrees per "tick"
     let wheelRect = null;
+
+    function setRingPress(clientX, clientY) {
+        const rect = wheel.getBoundingClientRect();
+        const dx = clamp((clientX - (rect.left + rect.width / 2)) / (rect.width / 2), -1, 1);
+        const dy = clamp((clientY - (rect.top + rect.height / 2)) / (rect.height / 2), -1, 1);
+        const strength = clamp(Math.hypot(dx, dy), 0.35, 1);
+        const tilt = 8 * strength;
+
+        wheel.classList.add('ring-pressed');
+        wheel.style.setProperty('--ring-tilt-x', `${(-dy * tilt).toFixed(2)}deg`);
+        wheel.style.setProperty('--ring-tilt-y', `${(dx * tilt).toFixed(2)}deg`);
+        wheel.style.setProperty('--ring-press-x', `${((dx + 1) * 50).toFixed(1)}%`);
+        wheel.style.setProperty('--ring-press-y', `${((dy + 1) * 50).toFixed(1)}%`);
+        wheel.style.setProperty('--ring-shadow-x', `${(-dx * 10 + 8).toFixed(1)}px`);
+        wheel.style.setProperty('--ring-shadow-y', `${(-dy * 10 + 8).toFixed(1)}px`);
+    }
+
+    function resetRingPress() {
+        wheel.classList.remove('ring-pressed');
+        wheel.style.setProperty('--ring-tilt-x', '0deg');
+        wheel.style.setProperty('--ring-tilt-y', '0deg');
+        wheel.style.setProperty('--ring-press-x', '50%');
+        wheel.style.setProperty('--ring-press-y', '50%');
+        wheel.style.setProperty('--ring-shadow-x', '8px');
+        wheel.style.setProperty('--ring-shadow-y', '8px');
+    }
+
+    wheel.addEventListener('pointerdown', (e) => {
+        if (!e.isPrimary || e.target.closest('#select-btn')) return;
+        wheel.setPointerCapture(e.pointerId);
+        setRingPress(e.clientX, e.clientY);
+    });
+
+    wheel.addEventListener('pointermove', (e) => {
+        if (!wheel.classList.contains('ring-pressed')) return;
+        setRingPress(e.clientX, e.clientY);
+    });
+
+    wheel.addEventListener('pointerup', resetRingPress);
+    wheel.addEventListener('pointercancel', resetRingPress);
+    wheel.addEventListener('lostpointercapture', resetRingPress);
 
     wheel.addEventListener('touchstart', (e) => {
         // Only trigger scroller logic if touched on the outer ring, not center Select btn

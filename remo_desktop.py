@@ -83,6 +83,8 @@ except ImportError:
 connected_clients = set()
 root = None
 status_label = None
+status_dot = None
+status_frame = None
 tray_icon = None
 
 # Global variables for cursor size management
@@ -890,14 +892,24 @@ def update_gui_status():
         return
     count = len(connected_clients)
     if count == 0:
-        status_label.config(text="Status: Disconnected (Waiting for connection)", fg="#FF7675")
+        status_label.config(text="Disconnected - waiting for phone", fg="#C0392B", bg="#FFF1F2")
+        if status_dot:
+            status_dot.config(bg="#FFF1F2")
+            status_dot.itemconfig("dot", fill="#E74C3C")
+        if status_frame:
+            status_frame.config(bg="#FFF1F2", highlightbackground="#FAD1D7")
         if HAS_PYSTRAY and tray_icon:
             try:
                 tray_icon.icon = Image.open("tray_disconnected.png")
             except Exception:
                 pass
     else:
-        status_label.config(text=f"Status: Connected ({count} remote{'s' if count > 1 else ''})", fg="#55E6C1")
+        status_label.config(text=f"Connected - {count} remote{'s' if count > 1 else ''}", fg="#087F5B", bg="#EEFDF8")
+        if status_dot:
+            status_dot.config(bg="#EEFDF8")
+            status_dot.itemconfig("dot", fill="#20C997")
+        if status_frame:
+            status_frame.config(bg="#EEFDF8", highlightbackground="#D6F5EA")
         if HAS_PYSTRAY and tray_icon:
             try:
                 tray_icon.icon = Image.open("tray_connected.png")
@@ -910,12 +922,12 @@ def trigger_gui_update():
         root.after_idle(update_gui_status)
 
 def build_gui(url):
-    global root, status_label
+    global root, status_label, status_dot, status_frame
     
     root = tk.Tk()
     root.title("remo - Desktop Remote Server")
-    root.geometry("380x520")
-    root.configure(bg="#1F242D")
+    root.geometry("430x560")
+    root.configure(bg="#F5F7FB")
     root.resizable(False, False)
 
     # Window close protocol: minimize to tray instead of quitting
@@ -926,32 +938,60 @@ def build_gui(url):
             root.destroy()
     root.protocol("WM_DELETE_WINDOW", on_closing)
 
-    # Header title Logo Image
-    logo_img = None
-    try:
-        logo_img_raw = Image.open("logo_full.png")
-        logo_img = ImageTk.PhotoImage(logo_img_raw)
-        logo_label = tk.Label(root, image=logo_img, bg="#1F242D")
-        logo_label.image = logo_img  # keep reference
-        logo_label.pack(pady=(20, 5))
-    except Exception:
-        # Fallback to text
-        title_label = tk.Label(
-            root, text="remo server", font=("Segoe UI", 24, "bold"),
-            bg="#1F242D", fg="#E6EAEE"
-        )
-        title_label.pack(pady=(20, 5))
+    panel = tk.Frame(root, bg="#F5F7FB", padx=26, pady=18)
+    panel.pack(fill="both", expand=True)
 
-    # Subtitle with IP address
-    ip_label = tk.Label(
-        root, text=f"URL: {url}", font=("Segoe UI", 12),
-        bg="#1F242D", fg="#8A99AD"
+    # Header
+    header = tk.Frame(panel, bg="#F5F7FB")
+    header.pack(fill="x", pady=(0, 14))
+
+    brand_row = tk.Frame(header, bg="#F5F7FB")
+    brand_row.pack(anchor="center")
+
+    logo_label = tk.Label(
+        brand_row, text="remo", font=("Segoe UI", 30, "bold"),
+        bg="#F5F7FB", fg="#202633"
     )
-    ip_label.pack(pady=5)
+    logo_label.pack(side="left")
 
-    # Frame wrapper for QR Code (styled card)
-    qr_frame = tk.Frame(root, bg="#282F3B", bd=2, relief="flat", padx=10, pady=10)
-    qr_frame.pack(pady=15)
+    logo_dot = tk.Canvas(
+        brand_row, width=18, height=18, bg="#F5F7FB",
+        highlightthickness=0, bd=0
+    )
+    logo_dot.create_oval(3, 3, 15, 15, fill="#55E6C1", outline="")
+    logo_dot.pack(side="left", padx=(8, 0), pady=(12, 0))
+
+    subtitle_label = tk.Label(
+        header, text="Desktop Remote Server", font=("Segoe UI", 10),
+        bg="#F5F7FB", fg="#6B7280"
+    )
+    subtitle_label.pack(anchor="center", pady=(2, 0))
+
+    # URL card
+    url_card = tk.Frame(
+        panel, bg="#FFFFFF", padx=14, pady=10,
+        highlightbackground="#E3E8EF", highlightthickness=1
+    )
+    url_card.pack(fill="x", pady=(0, 12))
+
+    url_caption = tk.Label(
+        url_card, text="Open on your phone", font=("Segoe UI", 9, "bold"),
+        bg="#FFFFFF", fg="#8A94A6"
+    )
+    url_caption.pack(anchor="w")
+
+    ip_label = tk.Label(
+        url_card, text=url, font=("Segoe UI", 11),
+        bg="#FFFFFF", fg="#2563EB", wraplength=340, justify="left"
+    )
+    ip_label.pack(anchor="w", pady=(4, 0))
+
+    # Frame wrapper for QR Code
+    qr_frame = tk.Frame(
+        panel, bg="#FFFFFF", padx=14, pady=14,
+        highlightbackground="#E3E8EF", highlightthickness=1
+    )
+    qr_frame.pack(pady=(0, 12))
 
     # Generate QR Code image
     qr = qrcode.QRCode(version=1, box_size=5, border=2)
@@ -961,23 +1001,36 @@ def build_gui(url):
     
     # Render QR Code in Tkinter
     photo = ImageTk.PhotoImage(image=qr_img)
-    qr_label = tk.Label(qr_frame, image=photo, bg="#282F3B")
+    qr_label = tk.Label(qr_frame, image=photo, bg="#FFFFFF")
     qr_label.image = photo  # keep reference
     qr_label.pack()
 
     # Instructions
     info_label = tk.Label(
-        root, text="Scan QR code on your mobile browser\n(Must be on the same Wi-Fi network)",
-        font=("Segoe UI", 9, "italic"), bg="#1F242D", fg="#8A99AD", justify="center"
+        panel, text="Scan the QR code with your mobile browser.\nUse the same Wi-Fi network as this PC.",
+        font=("Segoe UI", 8), bg="#F5F7FB", fg="#6B7280", justify="center"
     )
-    info_label.pack(pady=5)
+    info_label.pack(pady=(0, 10))
 
     # Connection Status
-    status_label = tk.Label(
-        root, text="Status: Disconnected (Waiting for connection)",
-        font=("Segoe UI", 11, "bold"), bg="#1F242D", fg="#FF7675"
+    status_frame = tk.Frame(
+        panel, bg="#FFF1F2", padx=14, pady=8,
+        highlightbackground="#FAD1D7", highlightthickness=1
     )
-    status_label.pack(pady=10)
+    status_frame.pack(fill="x", pady=(0, 10))
+
+    status_dot = tk.Canvas(
+        status_frame, width=14, height=14, bg="#FFF1F2",
+        highlightthickness=0, bd=0
+    )
+    status_dot.create_oval(3, 3, 11, 11, fill="#E74C3C", outline="", tags="dot")
+    status_dot.pack(side="left", padx=(0, 8))
+
+    status_label = tk.Label(
+        status_frame, text="Disconnected - waiting for phone",
+        font=("Segoe UI", 10, "bold"), bg="#FFF1F2", fg="#C0392B"
+    )
+    status_label.pack(side="left")
 
     # Windows Startup registry helper functions
     import winreg
@@ -1018,37 +1071,37 @@ def build_gui(url):
     
     # Startup toggle checkbutton
     startup_check = tk.Checkbutton(
-        root, text="Start with Windows", variable=startup_var, command=toggle_startup,
-        font=("Segoe UI", 10), bg="#1F242D", fg="#8A99AD", selectcolor="#282F3B",
-        activebackground="#1F242D", activeforeground="#8A99AD", bd=0, highlightthickness=0,
+        panel, text="Start with Windows", variable=startup_var, command=toggle_startup,
+        font=("Segoe UI", 10), bg="#F5F7FB", fg="#394150", selectcolor="#FFFFFF",
+        activebackground="#F5F7FB", activeforeground="#202633", bd=0, highlightthickness=0,
         cursor="hand2"
     )
-    startup_check.pack(pady=5)
+    startup_check.pack(anchor="center", pady=(0, 12))
 
     # Help note about system tray
     if HAS_PYSTRAY:
         tray_note = tk.Label(
-            root, text="Note: Closing this window minimizes it to the tray.",
-            font=("Segoe UI", 8), bg="#1F242D", fg="#5A697D"
+            panel, text="Closing this window minimizes remo to the tray.",
+            font=("Segoe UI", 8), bg="#F5F7FB", fg="#8A94A6"
         )
         tray_note.pack(pady=(0, 10))
 
     # Quit button
     quit_btn = tk.Button(
-        root, text="Stop Server & Exit", font=("Segoe UI", 11, "bold"),
-        bg="#C0392B", fg="white", activebackground="#E74C3C", activeforeground="white",
-        bd=0, padx=24, pady=8, cursor="hand2", command=lambda: (
+        panel, text="Stop Server & Exit", font=("Segoe UI", 11, "bold"),
+        bg="#DC2626", fg="white", activebackground="#B91C1C", activeforeground="white",
+        bd=0, padx=28, pady=8, cursor="hand2", relief="flat", command=lambda: (
             tray_icon.stop() if (HAS_PYSTRAY and tray_icon) else None,
             root.destroy()
         )
     )
-    quit_btn.pack(pady=5)
+    quit_btn.pack(fill="x", pady=(0, 2))
 
     # Hover animations for Quit Button
     def on_enter(e):
-        quit_btn['background'] = '#D63031'
+        quit_btn['background'] = '#B91C1C'
     def on_leave(e):
-        quit_btn['background'] = '#C0392B'
+        quit_btn['background'] = '#DC2626'
     quit_btn.bind("<Enter>", on_enter)
     quit_btn.bind("<Leave>", on_leave)
 
