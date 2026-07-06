@@ -30,13 +30,13 @@
 
     // Haptic feedback helper with premium presets
     const HAPTIC = {
-        tick: [6],
-        light: [12],
-        medium: [22],
-        heavy: [45],
-        success: [15, 25, 15],
-        warning: [50, 40, 50],
-        error: [60, 50, 60, 50, 90]
+        tick: [15],
+        light: [30],
+        medium: [50],
+        heavy: [85],
+        success: [30, 45, 30],
+        warning: [80, 50, 80],
+        error: [100, 60, 100, 60, 150]
     };
 
     function vibrate(typeOrDuration) {
