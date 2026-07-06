@@ -86,57 +86,78 @@ status_label = None
 tray_icon = None
 
 # Global variables for cursor size management
-ORIGINAL_POINTER_SIZE = 1
-ORIGINAL_CURSOR_BASE_SIZE = 32
 IS_CURSOR_ENLARGED = False
 cursor_timer = None
 
-def get_original_cursor_settings():
-    global ORIGINAL_POINTER_SIZE, ORIGINAL_CURSOR_BASE_SIZE
-    try:
-        # Read PointerSize
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Accessibility", 0, winreg.KEY_READ) as key:
-                ORIGINAL_POINTER_SIZE = winreg.QueryValueEx(key, "PointerSize")[0]
-        except Exception:
-            ORIGINAL_POINTER_SIZE = 1
-            
-        # Read CursorBaseSize
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Cursors", 0, winreg.KEY_READ) as key:
-                ORIGINAL_CURSOR_BASE_SIZE = winreg.QueryValueEx(key, "CursorBaseSize")[0]
-        except Exception:
-            ORIGINAL_CURSOR_BASE_SIZE = 32
-            
-        print(f"[Cursor] Original Settings: PointerSize={ORIGINAL_POINTER_SIZE}, CursorBaseSize={ORIGINAL_CURSOR_BASE_SIZE}")
-    except Exception as e:
-        print(f"[Cursor] Error getting original settings: {e}")
+# Cursor type IDs for SetSystemCursor
+CURSOR_IDS = {
+    'Arrow': 32512,
+    'IBeam': 32513,
+    'Wait': 32514,
+    'Cross': 32515,
+    'UpArrow': 32516,
+    'SizeNWSE': 32642,
+    'SizeNESW': 32643,
+    'SizeWE': 32644,
+    'SizeNS': 32645,
+    'SizeAll': 32646,
+    'No': 32648,
+    'Hand': 32649,
+    'AppStarting': 32650,
+}
 
-def apply_cursor_size(pointer_size, base_size):
-    try:
-        # Update Accessibility PointerSize
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Accessibility", 0, winreg.KEY_SET_VALUE) as key:
-                winreg.SetValueEx(key, "PointerSize", 0, winreg.REG_DWORD, pointer_size)
-        except Exception as e:
-            print(f"[Cursor] Error setting PointerSize: {e}")
-            
-        # Update Cursors CursorBaseSize
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Cursors", 0, winreg.KEY_SET_VALUE) as key:
-                winreg.SetValueEx(key, "CursorBaseSize", 0, winreg.REG_DWORD, base_size)
-        except Exception as e:
-            print(f"[Cursor] Error setting CursorBaseSize: {e}")
+# Map cursor type IDs to their registry value names under HKCU\Control Panel\Cursors
+CURSOR_REG_NAMES = {
+    32512: 'Arrow',
+    32513: 'IBeam',
+    32514: 'Wait',
+    32515: 'Crosshair',
+    32516: 'UpArrow',
+    32642: 'SizeNWSE',
+    32643: 'SizeNESW',
+    32644: 'SizeWE',
+    32645: 'SizeNS',
+    32646: 'SizeAll',
+    32648: 'No',
+    32649: 'Hand',
+    32650: 'AppStarting',
+}
 
-        # Reload cursors
-        ctypes.windll.user32.SystemParametersInfoW(0x0057, 0, None, 0)
-        
-        # Broadcast setting change message to all windows with short timeout (100ms)
-        ctypes.windll.user32.SendMessageTimeoutW(
-            0xFFFF, 0x001A, 0, "AccessibilityParameters", 0x0002, 100, None
-        )
+IMAGE_CURSOR = 2
+LR_LOADFROMFILE = 0x0010
+SPI_SETCURSORS = 0x0057
+ENLARGED_SIZE = 96  # 3x the default 32px cursor
+
+def enlarge_system_cursors():
+    """Load each system cursor file at a larger size and replace the active cursor."""
+    user32 = ctypes.windll.user32
+    try:
+        key_path = r"Control Panel\Cursors"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ) as key:
+            for cursor_id, reg_name in CURSOR_REG_NAMES.items():
+                try:
+                    cursor_path = winreg.QueryValueEx(key, reg_name)[0]
+                    if not cursor_path:
+                        continue
+                    # Expand environment variables like %SystemRoot%
+                    cursor_path = os.path.expandvars(cursor_path)
+                    if not os.path.exists(cursor_path):
+                        continue
+                    hCursor = user32.LoadImageW(
+                        None, cursor_path, IMAGE_CURSOR,
+                        ENLARGED_SIZE, ENLARGED_SIZE,
+                        LR_LOADFROMFILE
+                    )
+                    if hCursor:
+                        user32.SetSystemCursor(hCursor, cursor_id)
+                except Exception:
+                    pass
     except Exception as e:
-        print(f"[Cursor] Error applying cursor size: {e}")
+        print(f"[Cursor] Error enlarging cursors: {e}")
+
+def restore_system_cursors():
+    """Restore all system cursors to their default scheme."""
+    ctypes.windll.user32.SystemParametersInfoW(SPI_SETCURSORS, 0, None, 0)
 
 def start_shrink_task():
     try:
@@ -148,8 +169,7 @@ async def shrink_cursor():
     global IS_CURSOR_ENLARGED
     if IS_CURSOR_ENLARGED:
         IS_CURSOR_ENLARGED = False
-        await asyncio.to_thread(apply_cursor_size, ORIGINAL_POINTER_SIZE, ORIGINAL_CURSOR_BASE_SIZE)
-        print("[Cursor] Restored original cursor size.")
+        await asyncio.to_thread(restore_system_cursors)
 
 def trigger_cursor_enlarge():
     global IS_CURSOR_ENLARGED, cursor_timer
@@ -161,9 +181,7 @@ def trigger_cursor_enlarge():
         
     if not IS_CURSOR_ENLARGED:
         IS_CURSOR_ENLARGED = True
-        # Enlarge in background thread
-        asyncio.create_task(asyncio.to_thread(apply_cursor_size, 4, 128))
-        print("[Cursor] Enlarged cursor size to 4.")
+        asyncio.create_task(asyncio.to_thread(enlarge_system_cursors))
         
     # Shrink back after 1.5 seconds of inactivity
     try:
@@ -283,6 +301,95 @@ def press_key(key, repeat=1):
             ctypes.windll.user32.keybd_event(VK_LEFT, 0, 0, 0)
             ctypes.windll.user32.keybd_event(VK_LEFT, 0, KEYEVENTF_KEYUP, 0)
             ctypes.windll.user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+        return
+
+    if key == 'task_view':
+        # Win + Tab (Task View)
+        VK_LWIN = 0x5B
+        VK_TAB = 0x09
+        ctypes.windll.user32.keybd_event(VK_LWIN, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_TAB, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_TAB, 0, KEYEVENTF_KEYUP, 0)
+        ctypes.windll.user32.keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0)
+        return
+
+    if key == 'show_desktop':
+        # Win + D (Show Desktop / Minimize All)
+        VK_LWIN = 0x5B
+        VK_D = 0x44
+        ctypes.windll.user32.keybd_event(VK_LWIN, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_D, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_D, 0, KEYEVENTF_KEYUP, 0)
+        ctypes.windll.user32.keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0)
+        return
+
+    if key == 'alt_tab':
+        # Alt + Tab (Switch to next app)
+        VK_MENU = 0x12
+        VK_TAB = 0x09
+        ctypes.windll.user32.keybd_event(VK_MENU, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_TAB, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_TAB, 0, KEYEVENTF_KEYUP, 0)
+        ctypes.windll.user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+        return
+
+    if key == 'alt_shift_tab':
+        # Alt + Shift + Tab (Switch to previous app)
+        VK_MENU = 0x12
+        VK_SHIFT = 0x10
+        VK_TAB = 0x09
+        ctypes.windll.user32.keybd_event(VK_MENU, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_SHIFT, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_TAB, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_TAB, 0, KEYEVENTF_KEYUP, 0)
+        ctypes.windll.user32.keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0)
+        ctypes.windll.user32.keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0)
+        return
+
+    if key == 'zoom_in':
+        # Ctrl + Plus (Zoom In)
+        VK_CONTROL = 0x11
+        VK_OEM_PLUS = 0xBB
+        ctypes.windll.user32.keybd_event(VK_CONTROL, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_OEM_PLUS, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_OEM_PLUS, 0, KEYEVENTF_KEYUP, 0)
+        ctypes.windll.user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+        return
+
+    if key == 'zoom_out':
+        # Ctrl + Minus (Zoom Out)
+        VK_CONTROL = 0x11
+        VK_OEM_MINUS = 0xBD
+        ctypes.windll.user32.keybd_event(VK_CONTROL, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_OEM_MINUS, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_OEM_MINUS, 0, KEYEVENTF_KEYUP, 0)
+        ctypes.windll.user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+        return
+
+    if key == 'switch_desktop_left':
+        # Ctrl + Win + Left (Switch to left virtual desktop)
+        VK_CONTROL = 0x11
+        VK_LWIN = 0x5B
+        VK_LEFT = 0x25
+        ctypes.windll.user32.keybd_event(VK_CONTROL, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_LWIN, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_LEFT, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_LEFT, 0, KEYEVENTF_KEYUP, 0)
+        ctypes.windll.user32.keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0)
+        ctypes.windll.user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+        return
+
+    if key == 'switch_desktop_right':
+        # Ctrl + Win + Right (Switch to right virtual desktop)
+        VK_CONTROL = 0x11
+        VK_LWIN = 0x5B
+        VK_RIGHT = 0x27
+        ctypes.windll.user32.keybd_event(VK_CONTROL, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_LWIN, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_RIGHT, 0, 0, 0)
+        ctypes.windll.user32.keybd_event(VK_RIGHT, 0, KEYEVENTF_KEYUP, 0)
+        ctypes.windll.user32.keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0)
+        ctypes.windll.user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
         return
 
     vk = VK_CODES.get(key)
@@ -764,7 +871,7 @@ async def ws_handler(websocket):
             cursor_timer.cancel()
             cursor_timer = None
         if IS_CURSOR_ENLARGED:
-            apply_cursor_size(ORIGINAL_POINTER_SIZE, ORIGINAL_CURSOR_BASE_SIZE)
+            restore_system_cursors()
         app_watcher_task.cancel()
         connected_clients.remove(websocket)
         trigger_gui_update()
@@ -1067,7 +1174,6 @@ def start_async_server(loop, port, ssl_context):
     loop.run_until_complete(main_async(port, ssl_context))
 
 if __name__ == "__main__":
-    get_original_cursor_settings()
     ip = get_local_ip()
     port = 8000
     
@@ -1100,6 +1206,6 @@ if __name__ == "__main__":
         print("Exiting...")
     finally:
         if IS_CURSOR_ENLARGED:
-            apply_cursor_size(ORIGINAL_POINTER_SIZE, ORIGINAL_CURSOR_BASE_SIZE)
+            restore_system_cursors()
         print("Server stopped.")
         sys.exit(0)

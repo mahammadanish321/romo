@@ -438,82 +438,216 @@
     // TRACKPAD SMOOTH GESTURE CONTROLS
     // ----------------------------------------------------
     const trackpadSurface = document.getElementById('trackpad-surface');
-    let lastTouchX = 0;
-    let lastTouchY = 0;
+
+    // ── Gesture State ──
     let isTracking = false;
+    let lastTouchX = 0, lastTouchY = 0;
     let touchStartTime = 0;
     let touchStartPos = { x: 0, y: 0 };
-    let isTwoFingerClick = false;
+
+    // Double-tap detection
+    let lastTapTime = 0;
+    const DOUBLE_TAP_THRESHOLD = 300; // ms
+
+    // Multi-finger gesture state
+    let gestureFingers = 0;
+    let gestureStartTouches = [];
+    let gestureConsumed = false;
+    let lastPinchDist = 0;
+
+    // Two-finger scroll state
+    let lastScrollY = 0;
+    let lastScrollX = 0;
+    let isScrolling = false;
+
+    // Swipe detection thresholds
+    const SWIPE_THRESHOLD = 50; // px minimum for a swipe gesture
+    const PINCH_THRESHOLD = 30; // px minimum for pinch detection
+    const SCROLL_SENSITIVITY = 3.5;
+
+    function getTouchCenter(touches) {
+        let x = 0, y = 0;
+        for (let i = 0; i < touches.length; i++) {
+            x += touches[i].clientX;
+            y += touches[i].clientY;
+        }
+        return { x: x / touches.length, y: y / touches.length };
+    }
+
+    function getPinchDistance(touches) {
+        if (touches.length < 2) return 0;
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
 
     trackpadSurface.addEventListener('touchstart', (e) => {
         e.preventDefault();
         const touches = e.touches;
-        
+        gestureFingers = Math.max(gestureFingers, touches.length);
+
         if (touches.length === 1) {
             lastTouchX = touches[0].clientX;
             lastTouchY = touches[0].clientY;
             touchStartPos = { x: lastTouchX, y: lastTouchY };
             touchStartTime = Date.now();
             isTracking = true;
-            isTwoFingerClick = false;
+            gestureConsumed = false;
         } else if (touches.length === 2) {
-            // Two-finger tap indicator
-            isTwoFingerClick = true;
             isTracking = false;
+            isScrolling = false;
+            gestureConsumed = false;
+            const center = getTouchCenter(touches);
+            lastScrollX = center.x;
+            lastScrollY = center.y;
+            lastPinchDist = getPinchDistance(touches);
+            gestureStartTouches = [
+                { x: touches[0].clientX, y: touches[0].clientY },
+                { x: touches[1].clientX, y: touches[1].clientY }
+            ];
+        } else if (touches.length === 3) {
+            isTracking = false;
+            isScrolling = false;
+            gestureConsumed = false;
+            const center = getTouchCenter(touches);
+            gestureStartTouches = [{ x: center.x, y: center.y }];
         }
-    });
+    }, { passive: false });
 
     trackpadSurface.addEventListener('touchmove', (e) => {
-        if (!isTracking) return;
         e.preventDefault();
-        
-        const touch = e.touches[0];
-        const dx = touch.clientX - lastTouchX;
-        const dy = touch.clientY - lastTouchY;
-        
-        lastTouchX = touch.clientX;
-        lastTouchY = touch.clientY;
+        const touches = e.touches;
 
-        // Apply slight sensitivity boost
-        const sensitivity = 1.62;
-        
-        if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-            sendCommand({
-                type: 'mouse_move',
-                dx: dx * sensitivity,
-                dy: dy * sensitivity
-            });
+        // ── 1-finger: cursor movement ──
+        if (touches.length === 1 && isTracking && gestureFingers === 1) {
+            const dx = touches[0].clientX - lastTouchX;
+            const dy = touches[0].clientY - lastTouchY;
+            lastTouchX = touches[0].clientX;
+            lastTouchY = touches[0].clientY;
+            const sensitivity = 1.62;
+            if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+                sendCommand({ type: 'mouse_move', dx: dx * sensitivity, dy: dy * sensitivity });
+            }
         }
-    });
+
+        // ── 2-finger: scroll or pinch zoom ──
+        if (touches.length === 2 && gestureFingers === 2) {
+            const center = getTouchCenter(touches);
+            const dy = center.y - lastScrollY;
+            const dx = center.x - lastScrollX;
+            const currentPinchDist = getPinchDistance(touches);
+            const pinchDelta = currentPinchDist - lastPinchDist;
+
+            // Detect pinch vs scroll
+            if (Math.abs(pinchDelta) > PINCH_THRESHOLD && !isScrolling) {
+                // Pinch gesture → zoom
+                gestureConsumed = true;
+                if (pinchDelta > 0) {
+                    sendCommand({ type: 'key_press', key: 'zoom_in' });
+                } else {
+                    sendCommand({ type: 'key_press', key: 'zoom_out' });
+                }
+                lastPinchDist = currentPinchDist;
+                vibrate(10);
+            } else if (Math.abs(dy) > 2 || isScrolling) {
+                // Two-finger scroll
+                isScrolling = true;
+                gestureConsumed = true;
+                if (Math.abs(dy) > 1) {
+                    sendCommand({ type: 'mouse_scroll', delta: -dy * SCROLL_SENSITIVITY });
+                }
+            }
+            lastScrollY = center.y;
+            lastScrollX = center.x;
+        }
+
+        // ── 3-finger: swipe gestures (consume on threshold) ──
+        if (touches.length === 3 && gestureFingers === 3 && !gestureConsumed) {
+            const center = getTouchCenter(touches);
+            const startCenter = gestureStartTouches[0];
+            const dx = center.x - startCenter.x;
+            const dy = center.y - startCenter.y;
+
+            if (Math.abs(dx) > SWIPE_THRESHOLD || Math.abs(dy) > SWIPE_THRESHOLD) {
+                gestureConsumed = true;
+                vibrate(25);
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    // Horizontal swipe
+                    if (dx > 0) {
+                        sendCommand({ type: 'key_press', key: 'alt_tab' });
+                        showToast('Switch App →', 'info', 800);
+                    } else {
+                        sendCommand({ type: 'key_press', key: 'alt_shift_tab' });
+                        showToast('← Switch App', 'info', 800);
+                    }
+                } else {
+                    // Vertical swipe
+                    if (dy < 0) {
+                        sendCommand({ type: 'key_press', key: 'task_view' });
+                        showToast('Task View', 'info', 800);
+                    } else {
+                        sendCommand({ type: 'key_press', key: 'show_desktop' });
+                        showToast('Show Desktop', 'info', 800);
+                    }
+                }
+            }
+        }
+    }, { passive: false });
 
     const handleTouchEnd = (e) => {
         e.preventDefault();
-        if (isTwoFingerClick) {
-            // Right click trigger
+        const now = Date.now();
+
+        // ── 2-finger tap → Right Click ──
+        if (gestureFingers === 2 && !gestureConsumed) {
             vibrate(20);
             sendCommand({ type: 'mouse_click', button: 'right' });
-            isTwoFingerClick = false;
+            gestureFingers = 0;
+            isTracking = false;
             return;
         }
 
-        if (!isTracking) return;
-        isTracking = false;
+        // ── 3-finger tap (no swipe consumed) → nothing for now ──
 
-        const duration = Date.now() - touchStartTime;
-        const distance = Math.sqrt(
-            Math.pow(lastTouchX - touchStartPos.x, 2) +
-            Math.pow(lastTouchY - touchStartPos.y, 2)
-        );
+        if (e.touches.length > 0) return; // Still fingers on screen
 
-        // Tap validation (time < 220ms, dragged less than 6px)
-        if (duration < 220 && distance < 6) {
-            vibrate(15);
-            sendCommand({ type: 'mouse_click', button: 'left' });
+        // ── 1-finger tap or double-tap ──
+        if (gestureFingers === 1 && isTracking && !gestureConsumed) {
+            isTracking = false;
+            const duration = now - touchStartTime;
+            const distance = Math.sqrt(
+                Math.pow(lastTouchX - touchStartPos.x, 2) +
+                Math.pow(lastTouchY - touchStartPos.y, 2)
+            );
+
+            // Tap validation (time < 220ms, dragged less than 6px)
+            if (duration < 220 && distance < 6) {
+                // Check for double-tap
+                if (now - lastTapTime < DOUBLE_TAP_THRESHOLD) {
+                    vibrate(25);
+                    // Double click
+                    sendCommand({ type: 'mouse_click', button: 'left' });
+                    sendCommand({ type: 'mouse_click', button: 'left' });
+                    lastTapTime = 0; // Reset to prevent triple
+                } else {
+                    vibrate(15);
+                    sendCommand({ type: 'mouse_click', button: 'left' });
+                    lastTapTime = now;
+                }
+            }
+        }
+
+        // Reset gesture state when all fingers lift
+        if (e.touches.length === 0) {
+            gestureFingers = 0;
+            isTracking = false;
+            isScrolling = false;
+            gestureConsumed = false;
         }
     };
 
-    trackpadSurface.addEventListener('touchend', handleTouchEnd);
-    trackpadSurface.addEventListener('touchcancel', () => { isTracking = false; isTwoFingerClick = false; });
+    trackpadSurface.addEventListener('touchend', handleTouchEnd, { passive: false });
+    trackpadSurface.addEventListener('touchcancel', () => { gestureFingers = 0; isTracking = false; isScrolling = false; gestureConsumed = false; });
 
     // Explicit Trackpad Buttons
     document.getElementById('tp-click-left').addEventListener('pointerdown', (e) => {
