@@ -445,9 +445,10 @@
     let touchStartTime = 0;
     let touchStartPos = { x: 0, y: 0 };
 
-    // Double-tap detection
+    // Double-tap and drag-lock detection
     let lastTapTime = 0;
     const DOUBLE_TAP_THRESHOLD = 300; // ms
+    let isDoubleTapDragging = false;
 
     // Multi-finger gesture state
     let gestureFingers = 0;
@@ -459,11 +460,12 @@
     let lastScrollY = 0;
     let lastScrollX = 0;
     let isScrolling = false;
+    let scrollAccumulatorY = 0;
 
     // Swipe detection thresholds
     const SWIPE_THRESHOLD = 50; // px minimum for a swipe gesture
     const PINCH_THRESHOLD = 30; // px minimum for pinch detection
-    const SCROLL_SENSITIVITY = 3.5;
+    const SCROLL_THRESHOLD = 8;  // px minimum accumulation before triggering a scroll notch
 
     function getTouchCenter(touches) {
         let x = 0, y = 0;
@@ -487,16 +489,29 @@
         gestureFingers = Math.max(gestureFingers, touches.length);
 
         if (touches.length === 1) {
+            const now = Date.now();
             lastTouchX = touches[0].clientX;
             lastTouchY = touches[0].clientY;
             touchStartPos = { x: lastTouchX, y: lastTouchY };
-            touchStartTime = Date.now();
+            
+            // Check for double-tap to grab/drag
+            if (now - lastTapTime < DOUBLE_TAP_THRESHOLD) {
+                isDoubleTapDragging = true;
+                vibrate(25);
+                sendCommand({ type: 'mouse_down', button: 'left' });
+                showToast('Grab & Drag', 'info', 800);
+            } else {
+                isDoubleTapDragging = false;
+            }
+            
+            touchStartTime = now;
             isTracking = true;
             gestureConsumed = false;
         } else if (touches.length === 2) {
             isTracking = false;
             isScrolling = false;
             gestureConsumed = false;
+            scrollAccumulatorY = 0;
             const center = getTouchCenter(touches);
             lastScrollX = center.x;
             lastScrollY = center.y;
@@ -518,7 +533,7 @@
         e.preventDefault();
         const touches = e.touches;
 
-        // ── 1-finger: cursor movement ──
+        // ── 1-finger: cursor movement (or dragging/grabbing) ──
         if (touches.length === 1 && isTracking && gestureFingers === 1) {
             const dx = touches[0].clientX - lastTouchX;
             const dy = touches[0].clientY - lastTouchY;
@@ -549,12 +564,18 @@
                 }
                 lastPinchDist = currentPinchDist;
                 vibrate(10);
-            } else if (Math.abs(dy) > 2 || isScrolling) {
+            } else {
                 // Two-finger scroll
                 isScrolling = true;
                 gestureConsumed = true;
-                if (Math.abs(dy) > 1) {
-                    sendCommand({ type: 'mouse_scroll', delta: -dy * SCROLL_SENSITIVITY });
+                scrollAccumulatorY += dy;
+                
+                if (Math.abs(scrollAccumulatorY) >= SCROLL_THRESHOLD) {
+                    // Windows standard scroll wheel delta is 120. 
+                    // Swipe UP (scrollAccumulatorY negative) means natural scroll DOWN (-120).
+                    const scrollDirection = scrollAccumulatorY > 0 ? 120 : -120;
+                    sendCommand({ type: 'mouse_scroll', delta: scrollDirection });
+                    scrollAccumulatorY = 0; // reset accumulator
                 }
             }
             lastScrollY = center.y;
@@ -607,13 +628,21 @@
             return;
         }
 
-        // ── 3-finger tap (no swipe consumed) → nothing for now ──
-
         if (e.touches.length > 0) return; // Still fingers on screen
 
         // ── 1-finger tap or double-tap ──
         if (gestureFingers === 1 && isTracking && !gestureConsumed) {
             isTracking = false;
+            
+            if (isDoubleTapDragging) {
+                // Release the grabbed item
+                sendCommand({ type: 'mouse_up', button: 'left' });
+                isDoubleTapDragging = false;
+                lastTapTime = 0;
+                vibrate(15);
+                return;
+            }
+            
             const duration = now - touchStartTime;
             const distance = Math.sqrt(
                 Math.pow(lastTouchX - touchStartPos.x, 2) +
@@ -625,7 +654,7 @@
                 // Check for double-tap
                 if (now - lastTapTime < DOUBLE_TAP_THRESHOLD) {
                     vibrate(25);
-                    // Double click
+                    // Double click (two standard clicks in rapid succession)
                     sendCommand({ type: 'mouse_click', button: 'left' });
                     sendCommand({ type: 'mouse_click', button: 'left' });
                     lastTapTime = 0; // Reset to prevent triple
@@ -643,11 +672,24 @@
             isTracking = false;
             isScrolling = false;
             gestureConsumed = false;
+            if (isDoubleTapDragging) {
+                sendCommand({ type: 'mouse_up', button: 'left' });
+                isDoubleTapDragging = false;
+            }
         }
     };
 
     trackpadSurface.addEventListener('touchend', handleTouchEnd, { passive: false });
-    trackpadSurface.addEventListener('touchcancel', () => { gestureFingers = 0; isTracking = false; isScrolling = false; gestureConsumed = false; });
+    trackpadSurface.addEventListener('touchcancel', () => { 
+        gestureFingers = 0; 
+        isTracking = false; 
+        isScrolling = false; 
+        gestureConsumed = false;
+        if (isDoubleTapDragging) {
+            sendCommand({ type: 'mouse_up', button: 'left' });
+            isDoubleTapDragging = false;
+        }
+    });
 
     // Explicit Trackpad Buttons
     document.getElementById('tp-click-left').addEventListener('pointerdown', (e) => {

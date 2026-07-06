@@ -257,25 +257,21 @@ def click_mouse(button):
         ctypes.windll.user32.mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, None)
         ctypes.windll.user32.mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, None)
 
+def mouse_down(button):
+    if button == 'left':
+        ctypes.windll.user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, None)
+    elif button == 'right':
+        ctypes.windll.user32.mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, None)
+
+def mouse_up(button):
+    if button == 'left':
+        ctypes.windll.user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, None)
+    elif button == 'right':
+        ctypes.windll.user32.mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, None)
+
 def scroll_mouse(delta):
     # delta is positive for scroll up, negative for scroll down
-    user32 = ctypes.windll.user32
-    
-    # 1. Store original cursor position
-    pt = POINT()
-    user32.GetCursorPos(ctypes.byref(pt))
-    
-    # 2. Get screen dimensions
-    width = user32.GetSystemMetrics(0) # SM_CXSCREEN
-    
-    # 3. Temporarily move cursor to the far right edge (scrollbar area) to prevent video player hover triggers
-    user32.SetCursorPos(width - 15, pt.y)
-    
-    # 4. Trigger scroll
-    user32.mouse_event(MOUSEEVENTF_WHEEL, 0, 0, int(delta), None)
-    
-    # 5. Restore cursor instantly
-    user32.SetCursorPos(pt.x, pt.y)
+    ctypes.windll.user32.mouse_event(MOUSEEVENTF_WHEEL, 0, 0, int(delta), None)
 
 def press_key(key, repeat=1):
     if key == 'lock':
@@ -780,6 +776,14 @@ async def ws_handler(websocket):
                 elif msg_type == 'mouse_click':
                     btn = data.get('button', 'left')
                     click_mouse(btn)
+                    
+                elif msg_type == 'mouse_down':
+                    btn = data.get('button', 'left')
+                    mouse_down(btn)
+                    
+                elif msg_type == 'mouse_up':
+                    btn = data.get('button', 'left')
+                    mouse_up(btn)
                     
                 elif msg_type == 'mouse_scroll':
                     delta = data.get('delta', 0)
